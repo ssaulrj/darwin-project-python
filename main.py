@@ -7,7 +7,8 @@ import math
 
 from vision import Avision
 from procesamiento import Aprocesamiento #Clase de vision
-from mapeo import Amapeo, AStarPlanner #Import class from a_star
+from mapeo import Amapeo #Import class from a_star
+from ruta import Aruta
 from robot import Arobot #Clase de robot 
 
 class Amain:
@@ -16,7 +17,7 @@ class Amain:
         self.scaled = 1
         self.width_field = 350//self.scaled #90 width x
         self.height_field = 180//self.scaled #45 height y
-        self.grid_size = 10.0
+        self.grid_size = 8.0
 
     def set_event(self, number_event):
         self.event = number_event

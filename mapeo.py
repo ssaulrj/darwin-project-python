@@ -1,6 +1,8 @@
 """A* grid planning"""
 import math
 from matplotlib import pyplot as plt
+from datetime import datetime
+
 #from IPython.display import clear_output
 from time import sleep
 plt.rcParams['axes.facecolor'] = 'green'
@@ -9,6 +11,11 @@ show_animation = True
 
 class Amapeo:
     def __init__(self, width_field, height_field, scaled, grid_size):
+
+        # current date and time
+        self.now = datetime.now()
+        self.timestamp = str(datetime.timestamp(self.now))
+
         self.width_field = width_field
         self.height_field = height_field
         self.scaled = scaled
@@ -47,7 +54,7 @@ class Amapeo:
         for i in range(0, self.width_field):  # For de abajo
             self.ox.append(i)
             self.oy.append(0.0)
-        for i in range(0, self.height_field):  # For de derecha
+        """for i in range(0, self.height_field):  # For de derecha
             self.ox.append(self.width_field)
             self.oy.append(i)
         for i in range(0, self.width_field + 1):  # For arriba
@@ -55,7 +62,7 @@ class Amapeo:
             self.oy.append(self.height_field)
         for i in range(0, self.height_field + 1):  # For izquierda
             self.ox.append(0.0) 
-            self.oy.append(i)
+            self.oy.append(i)"""
         
     def Aplot_obstacle(self, obs_x, obs_y, obs_radio):
         #ox.append(obs_x/self.scaled)
@@ -115,16 +122,16 @@ class Amapeo:
                 a_star = AStarPlanner(self.ox, self.oy, self.grid_size, self.robot_rad) #Planner
                 rx, ry = a_star.planning(self.sx, self.sy, self.gx, self.gy) #Planning
                 plt.plot(rx, ry, "ok")
-                print("rx")
-                print(rx)
-                print("ry")
-                print(ry)
+                #print("rx")
+                #print(rx)
+                #print("ry")
+                #print(ry)
                 #print('rx: ',rx,'\n ry:',ry) #Print ruta
                 #sleep(1)
                 plt.grid(True)
                 plt.axis("equal")
                 plt.show(block=False) #Para que no se congele la ejecución
-                plt.savefig('evidence_image/actual_field.png')
+                plt.savefig('evidence_image/actual_field'+self.timestamp+'.png')
                 #sleep(2)  # La imagen se mostrará x segundos.
                 #plt.clf()
                 #sleep(1) # esperamos 1 segundo para generar la nueva imagen.

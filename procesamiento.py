@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 import colorsys
 import random
+from datetime import datetime
 
 # import the necessary packages
 from skimage.exposure import rescale_intensity
@@ -34,6 +35,11 @@ dic_colors = { "lower_color_blue"   : np.array([95, 100, 40], dtype=np.uint8), #
 
 class Aprocesamiento:
     def __init__(self, obj_mapeo, obj_robot, obj_vision):
+
+        # current date and time
+        self.now = datetime.now()
+        self.timestamp = str(datetime.timestamp(self.now))
+
         self.obj_mapeo  = obj_mapeo
         self.obj_robot  = obj_robot
         self.obj_vision = obj_vision
@@ -42,7 +48,7 @@ class Aprocesamiento:
         self.width_obj = 0 #Ancho de un objeto
         self.color_image = 0 #Imagen a color
         self.bg_removed = 0 #Imagen a color limitado a distancia
-        self.var_limits_inside_object = 5 #Pixeles dentro de objeto detectado
+        self.var_limits_inside_object = 8 #Pixeles dentro de objeto detectado
 
         self.real_array_roc = [] #Lista de real 
         self.pred_array_roc = [] #Lista pred
@@ -55,6 +61,12 @@ class Aprocesamiento:
         self.infer = self.saved_model_loaded.signatures['serving_default']
         self.file_names = "obj.names"
         self.fps = 30 #Numero de fotogramas deseado  (maximo 30)
+
+        self.result_images_id = 0 #Ver identificacion en una sola imagen
+
+        self.dic_values = {} #Diccionar deteccion de lineas
+
+        self.gp = (77)/(424-1)
 
     #Funciones------------------------------------------------------------------------------------------------------------------------------------------
     def configBox(self, pred_bbox):
@@ -124,7 +136,7 @@ class Aprocesamiento:
                 elif classes[class_ind] == "porteria":
                     print("hello porteria")
 
-                """if show_label:
+                if show_label:
                     bbox_mess = '%s: %.2f' % (classes[class_ind], score)
                     t_size = cv2.getTextSize(bbox_mess, 0, fontScale, thickness=bbox_thick // 2)[0]
                     c3 = (c1[0] + t_size[0], c1[1] - t_size[1] - 3)
@@ -134,7 +146,9 @@ class Aprocesamiento:
 
                     cv2.putText(image, bbox_mess, (c1[0], np.float32(c1[1] - 2)), 
                                 cv2.FONT_HERSHEY_SIMPLEX,
-                                fontScale, (0, 0, 0), bbox_thick // 2, lineType=cv2.LINE_AA)"""
+                                fontScale, (0, 0, 0), bbox_thick // 2, lineType=cv2.LINE_AA)
+
+                cv2.imshow("image",image)
                    
         return image
 
@@ -146,29 +160,13 @@ class Aprocesamiento:
             cx, cy = 0, 0  # set values as what you need in the situation
         return cx, cy
 
-    def paint_region_with_avg_intensity(self, img, rp, mi, channel): #Marcar regiones de segmentacion
-        for i in range(rp.shape[0]):
-            img[rp[i][0]][rp[i][1]][channel] = mi
-        return img
-
-    def seg_superpix(self, img): #Felzenszwalb es mas estable, realizar pruebas con los 3 (slic, watershed & fel..)
-        #segments = slic(img, n_segments=200, compactness=10, multichannel=True, enforce_connectivity=True, convert2lab=True)
-        segments = felzenszwalb(img, scale=100, sigma=0.5, min_size=60)
-        #gradient = sobel(rgb2gray(img))
-        #segments = watershed(gradient, markers=250, compactness=0.001)
-        for i in range(3):
-            regions = regionprops(segments, intensity_image=img[:,:,i])
-            for r in regions:
-                img = self.paint_region_with_avg_intensity(img, r.coords, int(r.mean_intensity), i)
-        return img 
-
     def filter_color(self, image, color): #Funcion para filtrar color
         hsv_frame = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         color_mask = cv2.inRange(hsv_frame, dic_colors.get("lower_color_"+color), dic_colors.get("upper_color_"+color))
         color_total = cv2.bitwise_and(image, image, mask=color_mask)
         diff_total = cv2.absdiff(image, color_total)
         #cv2.imshow('Diferencias detectadas', diff_total)
-        cv2.imwrite("evidence_image/frame_green.png", diff_total) #diff_total imagen sin verde
+        cv2.imwrite("evidence_image/frame_green"+self.timestamp+".png", diff_total) #diff_total imagen sin verde
         return diff_total
          
     def get_real_distance_objs(self, cz_blue): #Obtener distancia z dado un valor dado de z, considerando al robot, analisis en 4.5.1
@@ -177,11 +175,16 @@ class Aprocesamiento:
         print("Centroid real in {} cm.".format(A_dis_total)) #Distancia de objeto
         return A_dis_total
 
-    def get_coordenates_map(self, distance_robot_obj): #Obtener las coordenadas para mapear objeto con respecto a robot
-        xb = math.sin(math.radians(self.obj_robot.get_angle_robot_z())) * distance_robot_obj
-        yb = math.cos(math.radians(self.obj_robot.get_angle_robot_z())) * distance_robot_obj
-        xb_object = self.obj_mapeo.sx + xb #Sx posicion robot en mapa
-        yb_object = self.obj_mapeo.sy + yb #Sy posicion robot en mapa
+    def get_coordenates_map(self, angle, distance_robot_obj, sum): #Obtener las coordenadas para mapear objeto con respecto a robot
+        #self.obj_robot.get_angle_robot_z()
+        xb = math.sin(math.radians(angle)) * distance_robot_obj
+        yb = math.cos(math.radians(angle)) * distance_robot_obj
+        if sum == 1:
+            xb_object = self.obj_mapeo.sx + xb #Sx posicion robot en mapa
+            yb_object = self.obj_mapeo.sy + yb #Sy posicion robot en mapa
+        elif sum == 0:
+            xb_object = self.obj_mapeo.sx - xb #Sx posicion robot en mapa
+            yb_object = self.obj_mapeo.sy + yb #Sy posicion robot en mapa
         return xb_object, yb_object
 
     #Poner objetos en mapa-----------------------------------------------------------------------------------------------------------------------------
@@ -194,44 +197,50 @@ class Aprocesamiento:
         #Plot objects blue 
         #cv2.rectangle(self.image_blue, (x, y), (x+w, y+h), (0, 255, 0), 2) #(image, starrpoint, endpoint,color,thickness(-1 fill))
         #cv2.circle(self.image_blue, (cx_blue, cy_blue), 5, 255, -1)
-        cv2.line(image_blue, (cx, cy), (round(self.obj_vision.width/2), round(self.obj_vision.height/2)), 255, 2) #Línea centro del frame al centroide
-        #
-        #cv2.circle(self.image_blue, (x+var_limits_inside, y+round(h/2)), 10, (0, 255, 0), -1)
-        #cv2.circle(self.image_blue, (x+w-var_limits_inside, y+round(h/2)), 10, (0, 255, 0), -1)
-        #cv2.line(self.image_blue, (x+var_limits_inside, y+round(h/2)), (x+w-var_limits_inside, y+round(h/2)), (0, 0, 255), 2) #Línea centro del frame al centroide
-        
+     
         cz_real = round(self.get_real_distance_objs(cz),2) #Obtener distacia real
                 
         #Afield_obj.Aplot_ball_robot(self.pos_robot_x, self.pos_robot_y, self.pos_ball_x, self.pos_ball_y) #Posiciones del robot, pelota y ruta (rx, ry)
         if obj == 0: #print('Obj blue')
             x, y, w, h = cv2.boundingRect(cnt) #Dibujar un rectángulo alrededor del objeto
             width_obj = self.obj_vision.get_width_objs(x, y, w, h, var_limits_inside) #Obtener ancho de objeto
+            cv2.line(image_blue, (cx, cy), (round(self.obj_vision.width/2), round(self.obj_vision.height/2)), 255, 2) #Línea centro del frame al centroide
+            #
+            #cv2.circle(self.image_blue, (x+var_limits_inside, y+round(h/2)), 10, (0, 255, 0), -1)
+            #cv2.circle(self.image_blue, (x+w-var_limits_inside, y+round(h/2)), 10, (0, 255, 0), -1)
+            #cv2.line(image_blue, (x+100, y+round(h/2)), (x+w-100, y+round(h/2)), (0, 0, 255), 2) #Línea centro del frame al centroide
+            
             print('Result width: '+str(round(width_obj,3)))
             self.width_obj = round(width_obj,2)
             self.width_obj = round(width_obj,2)
-            x_obs, y_obs = self.get_coordenates_map(cz_real)
 
+            self.cn_number = (cx-1)*(self.gp)
             #COMMENT PLOTpass
-            distance_center = self.obj_vision.get_distance_points(cx, cy, cz_real, 
-                            round(self.obj_vision.width/2), round(self.obj_vision.height/2), 
-                            round(self.obj_vision.depth_image[round(self.obj_vision.height/2),round(self.obj_vision.width/2)]/10,2)) 
+            if cx >= round(self.obj_vision.width/2):    
+                self.cn_angle = self.cn_number - 38.5
+                x_obs, y_obs = self.get_coordenates_map(self.cn_angle, cz_real, 1)
+                self.obj_mapeo.Aplot_obstacle(x_obs, y_obs, self.width_obj) #Ubicar obj, obstacle
 
-            x_obs, y_obs = self.get_coordenates_map(cz_real)
-            #COMMENT PLOTpass
-            if cx <= round(self.obj_vision.width/2):
-                self.obj_mapeo.Aplot_obstacle(x_obs - distance_center, y_obs, self.width_obj) #Ubicar obj, obstacle
-
-            elif cx >= round(self.obj_vision.width/2):
-                self.obj_mapeo.Aplot_obstacle(x_obs + distance_center, y_obs, self.width_obj) #Ubicar obj, obstacle
+            elif cx <= round(self.obj_vision.width/2):
+                self.cn_angle = 38.5 - self.cn_number 
+                x_obs, y_obs = self.get_coordenates_map(self.cn_angle, cz_real, 0)
+                self.obj_mapeo.Aplot_obstacle(x_obs, y_obs, self.width_obj) #Ubicar obj, obstacle
         
         elif obj == 1: #print('Obj ball')
             print("Z ball: "+str(cz_real))
+
             #Obtener distancia entre centro (orientacion de camara y objeto identificado)
             distance_center = self.obj_vision.get_distance_points(cx, cy, cz_real, 
                             round(self.obj_vision.width/2), round(self.obj_vision.height/2), 
                             round(self.obj_vision.depth_image[round(self.obj_vision.height/2),round(self.obj_vision.width/2)]/10,2)) 
 
+            cv2.line(image_blue, (cx, cy), (round(self.obj_vision.width/2), round(self.obj_vision.height/2)), 125, 2) #Línea centro del frame al centroide
+
+            cv2.imshow('Ball', image_blue)
+
             x_obs, y_obs = self.get_coordenates_map(cz_real)
+
+            self.gp
             #COMMENT PLOTpass
             if cx < round(self.obj_vision.width/2):
                 self.obj_mapeo.Aplot_ball(x_obs - distance_center, y_obs)
@@ -262,14 +271,20 @@ class Aprocesamiento:
     def put_portero(self):
         return None
 
-    def put_lines(self):
-        return None
+    def put_lines_horizontal(self): #linea horizontal y de meta
+        print("hi horizontal")
 
-    def put_line_goal(self):
-        return None
+    def put_line_vertical(self): #Lineas verticales de color amarillo y blancos
+        print("hi vertical")
 
     def put_goal(self):
         return None
+
+    def find_contours(self, frame, color):
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV) # Convertir frame de BRG a HSV
+        thresh = cv2.inRange(hsv, dic_colors.get("lower_color_"+color), dic_colors.get("upper_color_"+color)) #Aplicar umbral a img y extraer los pixeles en el rango de colores
+        cnts, h = cv2.findContours(thresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE) # Encontrar los contornos en la imagen extraída
+        return cnts, thresh
 
     #Buscar objetos-------------------------------------------------------------------------------------------------------------------------------------
     def search_blue(self, image_blue, color):
@@ -278,88 +293,89 @@ class Aprocesamiento:
         cx, cy = 0, 0
         self.image_blue = image_blue
         frame = cv2.blur(self.image_blue, (15, 15))  # Aplicar desenfoque para eliminar ruido
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV) # Convertir frame de BRG a HSV
-        thresh = cv2.inRange(hsv, dic_colors.get("lower_color_"+color), dic_colors.get("upper_color_"+color)) #Aplicar umbral a img y extraer los pixeles en el rango de colores
-        cnts, h = cv2.findContours(thresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE) # Encontrar los contornos en la imagen extraída
+
+        cnts, thresh = self.find_contours(frame, color)
+
         for cnt in cnts:
             area = cv2.contourArea(cnt)
             if area > 300:
                 cx, cy = self.cen_moments(cnt)
                 self.image_blue, self.x_z_object, self.x_width_object = self.put_obj_in_map(cx,cy,round(self.obj_vision.depth_image[cy,cx]/10,2), self.image_blue, cnt, self.var_limits_inside_object, 0)
         
-        cv2.imwrite("evidence_image/frame_blue.png", self.image_blue) 
-        cv2.imshow('blue object', self.image_blue)
-        return self.x_z_object, self.x_width_object
+        return self.x_z_object, self.x_width_object, self.image_blue
 
     def search_lines(self, image_line, color):
         self.image_color = image_line
+        #cv2.imshow("Imagen filtrada sin color verde", image_line)
         filered = cv2.GaussianBlur(self.image_color, (5, 5), 0)  # (7,7),2
-        hsv = cv2.cvtColor(filered, cv2.COLOR_BGR2HSV) # Convertir frame de BRG a HSV
-        thresh = cv2.inRange(hsv, dic_colors.get("lower_color_"+color), dic_colors.get("upper_color_"+color)) #Aplicar umbral a img y extraer los pixeles en el rango de colores        
 
+        contours, thresh = self.find_contours(filered, color)
+
+        for cnt in contours:
+            area = cv2.contourArea(cnt)
+            if area > 1000:
+                cv2.drawContours(thresh, contours, -1, (0, 255, 0), 3)
+        #cv2.imshow("Contornos", thresh)
         bw = cv2.adaptiveThreshold(thresh, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 15, -2) # ADAPTIVE_THRESH_MEAN_C
-        # HORIZONTAL --------------------------------------------------------------------------------------
-        horizontal = np.copy(bw)
-
-        # Specify size on horizontal axis
-        cols = horizontal.shape[1]
-        horizontal_size = cols / 20
-        horizontal_size=int(horizontal_size)
-
-        # Create structure element for extracting horizontal lines through morphology operations
-        horizontalStructure = cv2.getStructuringElement(cv2.MORPH_RECT, (horizontal_size, 1))
-
-        # Apply morphology operations
-        horizontal = cv2.erode(horizontal, horizontalStructure)
-        horizontal = cv2.dilate(horizontal, horizontalStructure) 
-
-        horizontal = cv2.bitwise_not(horizontal)
-        # Step 1
-        edges = cv2.adaptiveThreshold(horizontal, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 3, -2)
-        # Step 2
-        kernel = np.ones((2, 2), np.uint8)
-        edges = cv2.dilate(edges, kernel)
-        # Step 3
-        smooth = np.copy(horizontal)
-        # Step 4
-        smooth = cv2.blur(smooth, (2, 2))
-        # Step 5
-        (rows, cols) = np.where(edges != 0) #(edges != 0)
-        horizontal[rows, cols] = smooth[rows, cols]
-        
-        # HoughLines ----------------------------------------------------------
-        #cv2.Canny(horizontal, rango menor, rango mayor, apertureSize=3)
-        dst = cv2.Canny(horizontal, 25, 300, apertureSize=3) #200, 300 
+        # HoughLines -------------------------------------------------------------------------------------
+        count_sum = 0
+        dst = cv2.Canny(bw, 25, 300, apertureSize=3) #200, 300
+        #cv2.imshow("canny", dst)
         cdst = cv2.cvtColor(dst, cv2.COLOR_GRAY2BGR)
-
-        lines = cv2.HoughLines(dst, 3, (90*np.pi/180), 100) # horizontal (90* np.pi)/180, 225 , vertical np.pi/180
-        if lines is not None:
-            for i in range(0, len(lines)):
-                rho = lines[i][0][0]
+        lines = cv2.HoughLines(dst, 1, np.pi/180, 40, min_theta=0, max_theta=np.pi) #vertical 
+        #lines = cv2.HoughLines(dst, 3, (90*np.pi/180), 100) # Horizontal
+        # ------------------------------------------------------------------------------------------------
+        array_valores_theta = []
+        array_repetido = []
+        nextlist = []
+        
+        if lines is not None:   
+            for i in range(0, len(lines)): 
                 theta = lines[i][0][1]
-                a = math.cos(theta)
-                b = math.sin(theta)
-                x0 = a * rho
-                y0 = b * rho
-                pt1 = (int(x0 + 1000 * (-b)), int(y0 + 1000 * (a)))
-                pt2 = (int(x0 - 1000 * (-b)), int(y0 - 1000 * (a)))
-                cv2.line(cdst, pt1, pt2, (0, 0, 255), 3, cv2.LINE_AA)
-                cv2.line(image_line, pt1, pt2, (0, 0, 255), 3, cv2.LINE_AA)
+                rho = lines[i][0][0]
+                theta_grades = round(theta * (180 / np.pi),3)
+                self.dic_values[theta_grades] = rho #guardar diccionario
+                array_valores_theta.append(theta_grades)
+                
+            nextlist = list(set(array_valores_theta))
+            nextlist.sort(reverse=True)
 
-        cv2.imshow("cdst", cdst) 
+            if not array_repetido:
+                array_repetido.append(nextlist[0])
+                self.see_lines(cdst, nextlist[0])
+
+            new_for = 0
+            for i in range(0, len(nextlist)): 
+                for x in range(new_for, len(array_repetido)):
+                    #print("i: ", nextlist[i], "x: ", array_repetido[x])
+                    if (array_repetido[x]*0.7) <= nextlist[i] <= (array_repetido[x]*1.3):
+                        #print("no append")
+                        pass
+                    else:
+                        #print("append")
+                        array_repetido.append(nextlist[i])
+                        new_for += 1 #Que sume buscada y no empieze con la
+                        self.see_lines(cdst, nextlist[i])
+                        break
 
         return image_line
 
-    # Line ends filter
-    def lineEnds(P):
-        """Central pixel and just one other must be set to be a line end"""
-        return 255 * ((P[4]==255) and np.sum(P)==510)
-        
-    def seach_lines(self):
-        return None
+    def see_lines(self, cdst, nextlistx):
+        a = np.cos(nextlistx*np.pi/180)
+        b = np.sin(nextlistx*np.pi/180)
+        x0 = a * self.dic_values.get(nextlistx)
+        y0 = b * self.dic_values.get(nextlistx)
+        x1 = int(x0 + 10000*(-b))
+        y1 = int(y0 + 10000*(a))
+        x2 = int(x0 - 10000*(-b))
+        y2 = int(y0 - 10000*(a))
+        cv2.line(cdst, (x1, y1), (x2, y2), (0, 255, 0), 1, cv2.LINE_AA)
+        cv2.imshow("lineas", cdst)
 
-    def search_line_goal(self):
-        return None
+        if 80 <= nextlistx <= 100:
+            self.put_lines_horizontal()
+        else: 
+            self.put_line_vertical()
 
     #Buscar balon, porteria y portero
     def search_objs(self, frame):
@@ -409,25 +425,44 @@ class Aprocesamiento:
                 if num_frames_count < 10:
                     pass
                 else:
-                    self.bg_removed = self.obj_vision.get_image_depth() #Eliminar pixeles mayores a 3 metros
-                    #self.bg_removed = self.color_image
+                    self.obj_vision.set_clipping_distance_m(5)
+                    #Eliminar pixeles mayores a x metros
+                    self.bg_removed = self.obj_vision.get_image_depth() 
                     self.bg_removed_green = self.filter_color(self.bg_removed.copy(), "green") #Filtro color verde
                     self.bg_removed_green_blue = self.filter_color(self.bg_removed_green.copy(), "blue") #Filtro color azul 
 
-                    #new_image = self.seg_superpix(bg_removed_green)                    
+                    #self.obj_vision.see_depth()
+                    #self.obj_vision.hole_filling_depth()
+
                     #self.search_lines(self.bg_removed_green_blue.copy(), "white")
 
-                    result_objs = self.search_objs(self.bg_removed.copy()) #solo bg_removed
-                    cz_blue_real, width_object = self.search_blue(self.bg_removed_green.copy(), "blue") #Search blue obstacles
+                    #result_objs = self.search_objs(self.bg_removed.copy()) #solo bg_removed
+                    cz_blue_real, width_object, image_blue = self.search_blue(self.bg_removed_green.copy(), "blue") #Search blue obstacles
+                    #cv2.imwrite("evidence_image/frame_blue"+self.timestamp+".png", self.image_blue) 
+                    cv2.imshow('blue object', image_blue)
+
                     #Search lines
-                    #lines_yellow = self.search_lines(self.bg_removed_green.copy(), "yellow") 
-                    #cv2.imshow("lineas yellow", lines_yellow)                                    
+                    lines_yellow = self.search_lines(self.bg_removed_green_blue.copy(), "yellow") 
+                    #cv2.imshow("lineas yellow", lines_yellow) 
+
+                    a = np.cos(0*np.pi/180)
+                    b = np.sin(0*np.pi/180)
+                    x0 = a * 212
+                    y0 = b * 212
+                    x1 = int(x0 + 10000*(-b))
+                    y1 = int(y0 + 10000*(a))
+                    x2 = int(x0 - 10000*(-b))
+                    y2 = int(y0 - 10000*(a))
+                    cv2.line(image_blue, (x1, y1), (x2, y2), (0, 255, 255), 1, cv2.LINE_AA)
+                    cv2.imshow("lineas yellow", image_blue) 
+                                   
                     #lines_white = self.search_lines(self.bg_removed_green.copy(), "white")    
-                    #cv2.imshow("lineas white", lines_white)              
+                    #cv2.imshow("lineas white", lines_white)   
+
                     #Mostrar resultado
-                    cv2.namedWindow("result-objs", cv2.WINDOW_AUTOSIZE)
-                    cv2.imwrite("evidence_image/search_objs.png", result_objs)
-                    cv2.imshow("result-objs", result_objs)
+                    #cv2.namedWindow("result-objs", cv2.WINDOW_AUTOSIZE)
+                    #cv2.imwrite("evidence_image/search_objs"+self.timestamp+".png", result_objs)
+                    #cv2.imshow("result-objs", result_objs)
 
                     #cv2.imshow('xxx blue object', self.bg_removed)
                     #cv2.imwrite("evidence_image/framegreen.png", bg_removed_green_blue) 
