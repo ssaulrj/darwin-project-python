@@ -1,0 +1,38 @@
+darwin@darwin-NUC10i7FNH:~$ cd envPT
+darwin@darwin-NUC10i7FNH:~/envPT$ ls
+bin      hello     include  lib64         pt          share
+darknet  hello.cu  lib      librealsense  pyvenv.cfg  tensorflow-yolov4-tflite
+darwin@darwin-NUC10i7FNH:~/envPT$ source bin/activate
+(envPT) darwin@darwin-NUC10i7FNH:~/envPT$ 
+(envPT) darwin@darwin-NUC10i7FNH:~/envPT$ ls -l
+(envPT) darwin@darwin-NUC10i7FNH:~/envPT$ cd pt
+(envPT) darwin@darwin-NUC10i7FNH:~/envPT/pt$ cd darwin-project/
+(envPT) darwin@darwin-NUC10i7FNH:~/envPT/pt/darwin-project$ git add .
+(envPT) darwin@darwin-NUC10i7FNH:~/envPT/pt/darwin-project$ git commit -m "agregue hi"
+[master f39e2ff] agregue hi
+ 8 files changed, 2 insertions(+)
+ create mode 100644 __pycache__/mapeo.cpython-36.pyc
+ create mode 100644 __pycache__/procesamiento.cpython-36.pyc
+ create mode 100644 __pycache__/robot.cpython-36.pyc
+ create mode 100644 __pycache__/vision.cpython-36.pyc
+ create mode 100644 actual_field.png
+ create mode 100644 contours.png
+ create mode 100644 framegreen_xxx.png
+(envPT) darwin@darwin-NUC10i7FNH:~/envPT/pt/darwin-project$ git push origin master
+Username for 'https://github.com': ssaulrj
+Password for 'https://ssaulrj@github.com': 
+Enumerating objects: 13, done.
+Counting objects: 100% (13/13), done.
+Delta compression using up to 12 threads
+Compressing objects: 100% (11/11), done.
+Writing objects: 100% (11/11), 220.08 KiB | 22.01 MiB/s, done.
+Total 11 (delta 2), reused 0 (delta 0)
+remote: Resolving deltas: 100% (2/2), completed with 2 local objects.
+To https://github.com/ssaulrj/darwin-project.git
+   3307ee5..f39e2ff  master -> master
+   
+------------------------------------------------------------------------
+git add .
+git commit -m "agregue hi"
+git push origin master
+ssaulrj

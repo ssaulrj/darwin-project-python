@@ -1,0 +1,76 @@
+#-------------------------------------------------------------------------
+#For supporting between Realsense and all programs on Ubuntu 20.04 -> Install 
+sudo apt update
+sudo apt install software-properties-common
+sudo add-apt-repository ppa:deadsnakes/ppa
+sudo apt install python3.7
+
+#We have to create an environment with python3.7 (Env are so useful because is encapsulated of system python version)
+sudo apt install python3.7-venv
+python3.7 -m venv envDarwin (or name you wish)
+source envDarwin/bin/activate (Necessary each time we're gonna work)
+deactivate (when done using the environment)
+
+#-------------------------------------------------------------------------
+#Install, follow github, with Ubuntu 20.04 and python 3.7
+
+#Linux Ubuntu installation, 
+#https://github.com/IntelRealSense/librealsense/blob/master/doc/installation.md
+sudo apt-get update && sudo apt-get upgrade && sudo apt-get dist-upgrade 
+#Download the complete source tree with git
+git clone https://github.com/IntelRealSense/librealsense.git
+#Navigate to librealsense root directory to run the following scripts
+#Install the core packages required to build librealsense binaries and the affected kernel modules:
+sudo apt-get install git libssl-dev libusb-1.0-0-dev pkg-config libgtk-3-dev
+# Distribution-specific packages: 
+sudo apt-get install libglfw3-dev libgl1-mesa-dev libglu1-mesa-dev
+#Run Intel Realsense permissions script from librealsense root directory:
+cd librealsense
+./scripts/setup_udev_rules.sh
+#Build and apply patched kernel modules for: *Ubuntu 14/16/18 with LTS kernel
+./scripts/patch-realsense-ubuntu-lts.sh
+#In order to accomplish this, add the driver's name hid_sensor_custom to /etc/modules file, eg:
+echo 'hid_sensor_custom' | sudo tee -a /etc/modules
+#Navigate to librealsense root directory and run 
+mkdir build && cd build
+#Run CMake: - The default build is set to produce the core shared object and unit-tests binaries
+cmake ../  
+#Builds librealsense along with the demos and tutorials
+cmake ../ -DBUILD_EXAMPLES=true
+#Recompile and install librealsense binaries:
+sudo make uninstall && make clean && make && sudo make install
+
+#-------------------------------------------------------------------------
+#Install, follow github, with Ubuntu 20.04 and python 3.7
+#https://github.com/IntelRealSense/librealsense/blob/master/doc/distribution_linux.md
+
+#Register the server's public key:
+sudo apt-key adv --keyserver keys.gnupg.net --recv-key F6E65AC044F831AC80A06380C8B3A55A6F3EFCDE || sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-key 
+#Add the server to the list of repositories:
+sudo add-apt-repository "deb http://realsense-hw-public.s3.amazonaws.com/Debian/apt-repo bionic main" -u
+#Install the libraries (see section below if upgrading packages):
+sudo apt-get install librealsense2-dkms
+sudo apt-get install librealsense2-utils
+#Optionally install the developer and debug packages:
+sudo apt-get install librealsense2-dev
+sudo apt-get install librealsense2-dbg
+#Reconnect the Intel RealSense depth camera and run (To verify the installation): 
+realsense-viewer 
+
+#Finally, install pyrealsense2 for cam
+pip install pyrealsense2
+
+#-------------------------------------------------------------------------
+#Packets we need (Paty&Saul)
+pip install opencv-python
+pip install matplotlib
+pip install numpy
+pip install scipy
+python -m pip install -U scikit-image
+
+pip install -U scikit-learn
+
+sudo apt-get install python3.7-tk (I needed this for matplotlib, screen not showed for ubuntu users)
+
+#-------------------------------------------------------------------------
+

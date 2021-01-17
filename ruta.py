@@ -1,5 +1,6 @@
-
-
+import math
+from matplotlib import pyplot as plt
+show_animation = True
 
 class Aruta:
     def __init__(self, ox, oy, reso, rr): #Initialize grid map for a star planning
@@ -21,10 +22,10 @@ class Aruta:
         def __str__(self):
             return str(self.x) + "," + str(self.y) + "," + str(self.cost) + "," + str(self.pind)
 
-    def planning(self, sx, sy, gx, gy): #A star path search
+    def planning(self, robot_x, robot_y, gx, gy): #A star path search
         """input: sx: start x position [m], sy: start y position [m], gx: goal x position [m], gy: goal y position [m]
            output: rx: x position list of the final path, ry: y position list of the final path"""
-        nstart = self.Node(self.calc_xyindex(sx, self.minx), self.calc_xyindex(sy, self.miny), 0.0, -1)
+        nstart = self.Node(self.calc_xyindex(robot_x, self.minx), self.calc_xyindex(robot_y, self.miny), 0.0, -1)
         ngoal = self.Node(self.calc_xyindex(gx, self.minx), self.calc_xyindex(gy, self.miny), 0.0, -1)
 
         open_set, closed_set = dict(), dict()
@@ -120,15 +121,9 @@ class Aruta:
         self.miny = round(min(oy))
         self.maxx = round(max(ox))
         self.maxy = round(max(oy))
-        #print("minx:", self.minx)
-        #print("miny:", self.miny)
-        #print("maxx:", self.maxx)
-        #print("maxy:", self.maxy)
 
         self.xwidth = round((self.maxx - self.minx) / self.reso)
         self.ywidth = round((self.maxy - self.miny) / self.reso)
-        #print("xwidth:", self.xwidth)
-        #print("ywidth:", self.ywidth)
 
         # obstacle map generation
         self.obmap = [[False for i in range(self.ywidth)]
@@ -143,7 +138,7 @@ class Aruta:
                         self.obmap[ix][iy] = True
                         break
 
-    def get_motion_model(): # dx, dy, cost
+    def get_motion_model(self): # dx, dy, cost
         motion = [[1, 0, 1],
                   [0, 1, 1],
                   [-1, 0, 1],

@@ -1,0 +1,18 @@
+
+
+#https://github.com/theAIGuysCode/tensorflow-yolov4-tflite
+#pip install -r requirements.txt
+#python save_model.py --weights ./data/custom.weights --output ./checkpoints/custom-416 --input_size 416 --model yolov4 
+#python detect.py --weights ./checkpoints/custom-416 --size 416 --model yolov4 --images ./data/images/car.jpg
+#(envPT) darwin@darwin-NUC10i7FNH:~/envPT/pt/darwin-project$ lsusb | grep 8086
+#Bus 002 Device 012: ID 8086:0ad3 Intel Corp. Intel(R) RealSense(TM) Depth Camera 415 
+
+"""
+(envPT) darwin@darwin-NUC10i7FNH:~/envPT/pt/darwin-project$ lsmod | grep video
+video                  49152  1 i915
+(envPT) darwin@darwin-NUC10i7FNH:~/envPT/pt/darwin-project$ dkms status
+librealsense2-dkms, 1.3.16, 5.4.0-59-generic, x86_64: installed
+(envPT) darwin@darwin-NUC10i7FNH:~/envPT/pt/darwin-project$ dmesg -wT
+# sudo apt install librealsense2-dkms
+# sudo apt-get install librealsense2-dkms=1.3.1-0ubuntu3
+"""

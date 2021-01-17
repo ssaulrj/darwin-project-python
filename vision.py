@@ -5,7 +5,7 @@ import pyrealsense2 as rs
 import math
 
 class Avision:
-	def __init__(self):
+	def __init__(self, clipping_distance_m):
 		#print("hi config")
 		self.width, self.height, self.framerates = 424, 240, 30
 		self.pipeline = rs.pipeline() # Create a pipeline
@@ -18,12 +18,12 @@ class Avision:
 		print("Depth Scale is: " , self.depth_scale)
 
 		#Remove background of objects more than clipping_distance_in_meters x(1) away
-		self.set_clipping_distance_m(1.5)
+		self.set_clipping_distance_m(clipping_distance_m)
 		self.align_to = rs.stream.color # Create an align object
 		self.align = rs.align(self.align_to)
 		self.depth_image = 65.7 #Matriz de profundidad
 		self.color_intrin = 0
-		time.sleep(2.0)
+		time.sleep(1.0)
 		#print("end config")
 
 	def set_clipping_distance_m(self, meters):

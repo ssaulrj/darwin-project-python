@@ -119,3 +119,34 @@
 
     self.seg_image = self.seg_superpix(self.bg_removed_green_blue)  
                     cv2.imshow("seg_image", self.seg_image)
+
+
+                    if show_label:
+                    bbox_mess = '%s: %.2f' % (classes[class_ind], score)
+                    t_size = cv2.getTextSize(bbox_mess, 0, fontScale, thickness=bbox_thick // 2)[0]
+                    c3 = (c1[0] + t_size[0], c1[1] - t_size[1] - 3)
+                    
+                    cv2.rectangle(image, c1, (np.float32(c3[0]), np.float32(c3[1])), 
+                                bbox_color, -1) #filled
+
+                    cv2.putText(image, bbox_mess, (c1[0], np.float32(c1[1] - 2)), 
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                fontScale, (0, 0, 0), bbox_thick // 2, lineType=cv2.LINE_AA)
+
+                cv2.imshow("image",image)
+
+            #
+            #cv2.circle(self.image_blue, (x+var_limits_inside, y+round(h/2)), 10, (0, 255, 0), -1)
+            #cv2.circle(self.image_blue, (x+w-var_limits_inside, y+round(h/2)), 10, (0, 255, 0), -1)
+            #cv2.line(image_blue, (x+100, y+round(h/2)), (x+w-100, y+round(h/2)), (0, 0, 255), 2) #Línea centro del frame al centroide
+
+                            """a = np.cos(0*np.pi/180)
+                b = np.sin(0*np.pi/180)
+                x0 = a * 212
+                y0 = b * 212
+                x1 = int(x0 + 10000*(-b))
+                y1 = int(y0 + 10000*(a))
+                x2 = int(x0 - 10000*(-b))
+                y2 = int(y0 - 10000*(a))
+                cv2.line(image_blue, (x1, y1), (x2, y2), (0, 255, 255), 1, cv2.LINE_AA)
+                cv2.imshow("lineas yellow", image_blue)""" 

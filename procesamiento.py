@@ -29,12 +29,12 @@ dic_colors = { "lower_color_blue"   : np.array([95, 100, 40], dtype=np.uint8), #
                "upper_color_white"  : np.array([172,111,255], dtype=np.uint8), #blanco 131, 255, 255
                "lower_color_yellow" : np.array([20, 70,   70], dtype=np.uint8), #amarillo
                "upper_color_yellow" : np.array([35, 255, 255], dtype=np.uint8), #amarillo
-               "lower_color_red"    : np.array([0,20,20], dtype=np.uint8), #rojo (175,50,20)
-               "upper_color_red"    : np.array([7,255,255], dtype=np.uint8), #rojo (180,255,255)
 }
 
 class Aprocesamiento:
-    def __init__(self, obj_mapeo, obj_robot, obj_vision):
+    def __init__(self, obj_mapeo, obj_robot, obj_vision, event_number):
+
+        self.event_number = event_number
 
         # current date and time
         self.now = datetime.now()
@@ -95,12 +95,7 @@ class Aprocesamiento:
         num_classes = len(classes)
         image_h, image_w, _ = image.shape
         hsv_tuples = [(1.0 * x / num_classes, 1., 1.) for x in range(num_classes)]
-        colors = list(map(lambda x: colorsys.hsv_to_rgb(*x), hsv_tuples))
-        colors = list(map(lambda x: (int(x[0] * 255), int(x[1] * 255), int(x[2] * 255)), colors))
 
-        random.seed(0)
-        random.shuffle(colors)
-        random.seed(None)
         out_boxes, out_scores, out_classes, num_boxes = bboxes
         for i in range(num_boxes[0]):
             if int(out_classes[0][i]) < 0 or int(out_classes[0][i]) > num_classes: continue
@@ -114,41 +109,25 @@ class Aprocesamiento:
             score = out_scores[0][i]
             if score > 0.7:
                 class_ind = int(out_classes[0][i])
-                bbox_color = colors[class_ind]
                 bbox_thick = int(0.6 * (image_h + image_w) / 600)
                 c1, c2 = (coor[1], coor[0]), (coor[3], coor[2])
-                #image =Identificar_Compa_Ene(image,c1,c2,colores,Imagen_Profundidad)
-                cv2.rectangle(image, c1, c2, bbox_color, bbox_thick)
-                #cx1, cx2 = (coor[1], coor[0]), (coor[3], coor[2])
                 cx1, cy2 = int(round(coor[1]+((coor[3]-coor[1])/2))), int(round(coor[0]+((coor[2]-coor[0])/2)))
                 cv2.circle(image, (cx1, cy2), 3, (0, 0, 255), 5)
 
-                #print(classes[class_ind]) #Identifica la clase encontrada
 
-                if classes[class_ind] == "balon": #1 ball
-                    self.put_obj_in_map(cx1,cy2,round(self.obj_vision.depth_image[cy2,cx1]/10,2), image, 0, 0, 1) 
+                if classes[class_ind] == "balon": #2 ball
+                    obj_case = 2
                     print("hello balon")
 
-                elif classes[class_ind] == "portero": #2 goalkeeper
-                    self.put_obj_in_map(cx1,cy2,round(self.obj_vision.depth_image[cy2,cx1]/10,2), image, 0, 0, 2) 
+                elif classes[class_ind] == "portero": #3 goalkeeper
+                    obj_case = 3
                     print("hello portero")
 
-                elif classes[class_ind] == "porteria":
+                elif classes[class_ind] == "porteria": #4 porteria
+                    obj_case = 4
                     print("hello porteria")
 
-                if show_label:
-                    bbox_mess = '%s: %.2f' % (classes[class_ind], score)
-                    t_size = cv2.getTextSize(bbox_mess, 0, fontScale, thickness=bbox_thick // 2)[0]
-                    c3 = (c1[0] + t_size[0], c1[1] - t_size[1] - 3)
-                    
-                    cv2.rectangle(image, c1, (np.float32(c3[0]), np.float32(c3[1])), 
-                                bbox_color, -1) #filled
-
-                    cv2.putText(image, bbox_mess, (c1[0], np.float32(c1[1] - 2)), 
-                                cv2.FONT_HERSHEY_SIMPLEX,
-                                fontScale, (0, 0, 0), bbox_thick // 2, lineType=cv2.LINE_AA)
-
-                cv2.imshow("image",image)
+                self.put_obj_in_map(cx1,cy2,round(self.obj_vision.depth_image[cy2,cx1]/10,2), image, 0, 0, obj_case)
                    
         return image
 
@@ -165,14 +144,10 @@ class Aprocesamiento:
         color_mask = cv2.inRange(hsv_frame, dic_colors.get("lower_color_"+color), dic_colors.get("upper_color_"+color))
         color_total = cv2.bitwise_and(image, image, mask=color_mask)
         diff_total = cv2.absdiff(image, color_total)
-        #cv2.imshow('Diferencias detectadas', diff_total)
-        cv2.imwrite("evidence_image/frame_green"+self.timestamp+".png", diff_total) #diff_total imagen sin verde
         return diff_total
          
     def get_real_distance_objs(self, cz_blue): #Obtener distancia z dado un valor dado de z, considerando al robot, analisis en 4.5.1
-        print("Centroid in {} cm.".format(cz_blue)) #Distancia de objeto
         A_dis_total = cz_blue * math.sin(math.radians(self.obj_robot.angle_robot_camera))  
-        print("Centroid real in {} cm.".format(A_dis_total)) #Distancia de objeto
         return A_dis_total
 
     def get_coordenates_map(self, angle, distance_robot_obj, sum): #Obtener las coordenadas para mapear objeto con respecto a robot
@@ -180,90 +155,51 @@ class Aprocesamiento:
         xb = math.sin(math.radians(angle)) * distance_robot_obj
         yb = math.cos(math.radians(angle)) * distance_robot_obj
         if sum == 1:
-            xb_object = self.obj_mapeo.sx + xb #Sx posicion robot en mapa
-            yb_object = self.obj_mapeo.sy + yb #Sy posicion robot en mapa
+            xb_object = self.obj_mapeo.robot_x + xb #robot_x posicion robot en mapa
+            yb_object = self.obj_mapeo.robot_y + yb #robot_y posicion robot en mapa
         elif sum == 0:
-            xb_object = self.obj_mapeo.sx - xb #Sx posicion robot en mapa
-            yb_object = self.obj_mapeo.sy + yb #Sy posicion robot en mapa
+            xb_object = self.obj_mapeo.robot_x - xb #robot_x posicion robot en mapa
+            yb_object = self.obj_mapeo.robot_y + yb #robot_y posicion robot en mapa
         return xb_object, yb_object
 
     #Poner objetos en mapa-----------------------------------------------------------------------------------------------------------------------------
-    #obj 0 Put blue obstacles
-    #obj 1 Put ball 
-    #obj 2 Put portero - goalkeeper
-    #obj 3 Put porteria - goal
-    #obj 4 Put lines
-    def put_obj_in_map(self, cx, cy, cz, image_blue, cnt, var_limits_inside, obj):
-        #Plot objects blue 
-        #cv2.rectangle(self.image_blue, (x, y), (x+w, y+h), (0, 255, 0), 2) #(image, starrpoint, endpoint,color,thickness(-1 fill))
-        #cv2.circle(self.image_blue, (cx_blue, cy_blue), 5, 255, -1)
-     
+    #Objetos: 1 Put blue obstacles, 2 Put ball, 3 Put portero - goalkeeper, 4 Put porteria - goal
+    def put_obj_in_map(self, cx, cy, cz, image_final, cnt, var_limits_inside, obj_case):
+
         cz_real = round(self.get_real_distance_objs(cz),2) #Obtener distacia real
                 
-        #Afield_obj.Aplot_ball_robot(self.pos_robot_x, self.pos_robot_y, self.pos_ball_x, self.pos_ball_y) #Posiciones del robot, pelota y ruta (rx, ry)
-        if obj == 0: #print('Obj blue')
-            x, y, w, h = cv2.boundingRect(cnt) #Dibujar un rectángulo alrededor del objeto
-            width_obj = self.obj_vision.get_width_objs(x, y, w, h, var_limits_inside) #Obtener ancho de objeto
-            cv2.line(image_blue, (cx, cy), (round(self.obj_vision.width/2), round(self.obj_vision.height/2)), 255, 2) #Línea centro del frame al centroide
-            #
-            #cv2.circle(self.image_blue, (x+var_limits_inside, y+round(h/2)), 10, (0, 255, 0), -1)
-            #cv2.circle(self.image_blue, (x+w-var_limits_inside, y+round(h/2)), 10, (0, 255, 0), -1)
-            #cv2.line(image_blue, (x+100, y+round(h/2)), (x+w-100, y+round(h/2)), (0, 0, 255), 2) #Línea centro del frame al centroide
-            
-            print('Result width: '+str(round(width_obj,3)))
-            self.width_obj = round(width_obj,2)
-            self.width_obj = round(width_obj,2)
+        if obj_case == 1 or obj_case == 2 or obj_case == 3: 
+            if obj_case == 1:
+                x, y, w, h = cv2.boundingRect(cnt) #Dibujar un rectángulo alrededor del objeto
+                self.width_obj = round(self.obj_vision.get_width_objs(x, y, w, h, var_limits_inside), 2)#Obtener ancho de objeto
+                
+            cv2.circle(image_final, (cx, cy), 5, obj_case*60, -1) #Marcar punto de ubicación
 
             self.cn_number = (cx-1)*(self.gp)
             #COMMENT PLOTpass
             if cx >= round(self.obj_vision.width/2):    
                 self.cn_angle = self.cn_number - 38.5
                 x_obs, y_obs = self.get_coordenates_map(self.cn_angle, cz_real, 1)
-                self.obj_mapeo.Aplot_obstacle(x_obs, y_obs, self.width_obj) #Ubicar obj, obstacle
 
             elif cx <= round(self.obj_vision.width/2):
-                self.cn_angle = 38.5 - self.cn_number 
+                self.cn_angle = 38.5 - self.cn_number
                 x_obs, y_obs = self.get_coordenates_map(self.cn_angle, cz_real, 0)
+            
+            if obj_case == 1:
                 self.obj_mapeo.Aplot_obstacle(x_obs, y_obs, self.width_obj) #Ubicar obj, obstacle
-        
-        elif obj == 1: #print('Obj ball')
-            print("Z ball: "+str(cz_real))
 
-            #Obtener distancia entre centro (orientacion de camara y objeto identificado)
-            distance_center = self.obj_vision.get_distance_points(cx, cy, cz_real, 
-                            round(self.obj_vision.width/2), round(self.obj_vision.height/2), 
-                            round(self.obj_vision.depth_image[round(self.obj_vision.height/2),round(self.obj_vision.width/2)]/10,2)) 
+            elif obj_case == 2: 
+                self.obj_mapeo.Aplot_ball(x_obs, y_obs)
 
-            cv2.line(image_blue, (cx, cy), (round(self.obj_vision.width/2), round(self.obj_vision.height/2)), 125, 2) #Línea centro del frame al centroide
+            elif obj_case == 3:
+                self.obj_mapeo.Aplot_goalkeeper(x_obs, y_obs)
 
-            cv2.imshow('Ball', image_blue)
-
-            x_obs, y_obs = self.get_coordenates_map(cz_real)
-
-            self.gp
-            #COMMENT PLOTpass
-            if cx < round(self.obj_vision.width/2):
-                self.obj_mapeo.Aplot_ball(x_obs - distance_center, y_obs)
-
-            elif cx > round(self.obj_vision.width/2):
-                self.obj_mapeo.Aplot_ball(x_obs + distance_center, y_obs)
-
-        elif obj == 2: #print('Obj goalkeeper')
-            pass
-            #COMMENT PLOTpass
-            #self.obj_mapeo.Aplot_goalkeeper(x_obs, y_obs)
-
-        elif obj == 3: #print('Obj goal')
+        elif obj_case == 4: #print('Obj goal')
             pass
             #COMMENT PLOTpass
             #self.obj_mapeo.Aplot_goal(x_obs, y_obs)
 
-        elif obj == 4: #print('Obj lines')
-            pass
-            #COMMENT PLOTpass
-            #self.obj_mapeo.Aplot_lines(x_obs, y_obs)
-
-        return image_blue, cz_real, self.width_obj
+        return image_final, cz_real, self.width_obj
 
     def put_ball(self):
         return None
@@ -272,44 +208,43 @@ class Aprocesamiento:
         return None
 
     def put_lines_horizontal(self): #linea horizontal y de meta
-        print("hi horizontal")
+        #print("hi horizontal")
+        pass
 
     def put_line_vertical(self): #Lineas verticales de color amarillo y blancos
-        print("hi vertical")
+        #print("hi vertical")
+        pass
 
     def put_goal(self):
         return None
 
     def find_contours(self, frame, color):
+        frame = cv2.GaussianBlur(frame, (5, 5), 0)  # (7,7),2
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV) # Convertir frame de BRG a HSV
         thresh = cv2.inRange(hsv, dic_colors.get("lower_color_"+color), dic_colors.get("upper_color_"+color)) #Aplicar umbral a img y extraer los pixeles en el rango de colores
         cnts, h = cv2.findContours(thresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE) # Encontrar los contornos en la imagen extraída
         return cnts, thresh
 
     #Buscar objetos-------------------------------------------------------------------------------------------------------------------------------------
-    def search_blue(self, image_blue, color):
+    def search_blue(self, image_final, color):
         self.x_z_object = 0
         self.x_width_object = 0
         cx, cy = 0, 0
-        self.image_blue = image_blue
-        frame = cv2.blur(self.image_blue, (15, 15))  # Aplicar desenfoque para eliminar ruido
 
-        cnts, thresh = self.find_contours(frame, color)
+        cnts, thresh = self.find_contours(image_final, color)
 
         for cnt in cnts:
             area = cv2.contourArea(cnt)
             if area > 300:
                 cx, cy = self.cen_moments(cnt)
-                self.image_blue, self.x_z_object, self.x_width_object = self.put_obj_in_map(cx,cy,round(self.obj_vision.depth_image[cy,cx]/10,2), self.image_blue, cnt, self.var_limits_inside_object, 0)
+                image_final, self.x_z_object, self.x_width_object = self.put_obj_in_map(cx,cy,round(self.obj_vision.depth_image[cy,cx]/10,2), image_final, cnt, self.var_limits_inside_object, 1)
         
-        return self.x_z_object, self.x_width_object, self.image_blue
+        return self.x_z_object, self.x_width_object, image_final
 
-    def search_lines(self, image_line, color):
-        self.image_color = image_line
+    def search_lines(self, image_line, image_final, color):
         #cv2.imshow("Imagen filtrada sin color verde", image_line)
-        filered = cv2.GaussianBlur(self.image_color, (5, 5), 0)  # (7,7),2
 
-        contours, thresh = self.find_contours(filered, color)
+        contours, thresh = self.find_contours(image_line, color)
 
         for cnt in contours:
             area = cv2.contourArea(cnt)
@@ -342,7 +277,7 @@ class Aprocesamiento:
 
             if not array_repetido:
                 array_repetido.append(nextlist[0])
-                self.see_lines(cdst, nextlist[0])
+                self.see_lines(image_final, nextlist[0])
 
             new_for = 0
             for i in range(0, len(nextlist)): 
@@ -355,12 +290,12 @@ class Aprocesamiento:
                         #print("append")
                         array_repetido.append(nextlist[i])
                         new_for += 1 #Que sume buscada y no empieze con la
-                        self.see_lines(cdst, nextlist[i])
+                        image_final = self.see_lines(image_final, nextlist[i])
                         break
 
-        return image_line
+        return image_final
 
-    def see_lines(self, cdst, nextlistx):
+    def see_lines(self, image_final, nextlistx):
         a = np.cos(nextlistx*np.pi/180)
         b = np.sin(nextlistx*np.pi/180)
         x0 = a * self.dic_values.get(nextlistx)
@@ -369,13 +304,14 @@ class Aprocesamiento:
         y1 = int(y0 + 10000*(a))
         x2 = int(x0 - 10000*(-b))
         y2 = int(y0 - 10000*(a))
-        cv2.line(cdst, (x1, y1), (x2, y2), (0, 255, 0), 1, cv2.LINE_AA)
-        cv2.imshow("lineas", cdst)
+        cv2.line(image_final, (x1, y1), (x2, y2), (0, 255, 0), 1, cv2.LINE_AA)
 
         if 80 <= nextlistx <= 100:
             self.put_lines_horizontal()
         else: 
             self.put_line_vertical()
+
+        return image_final
 
     #Buscar balon, porteria y portero
     def search_objs(self, frame):
@@ -420,62 +356,44 @@ class Aprocesamiento:
         try: #Streaming loop
             while True:
 
-                num_frames_count += 1
-                print(num_frames_count)
-                if num_frames_count < 10:
-                    pass
-                else:
-                    self.obj_vision.set_clipping_distance_m(5)
-                    #Eliminar pixeles mayores a x metros
-                    self.bg_removed = self.obj_vision.get_image_depth() 
-                    self.bg_removed_green = self.filter_color(self.bg_removed.copy(), "green") #Filtro color verde
-                    self.bg_removed_green_blue = self.filter_color(self.bg_removed_green.copy(), "blue") #Filtro color azul 
+                #Eliminar pixeles mayores a x metros
+                self.bg_removed = self.obj_vision.get_image_depth() 
+                self.bg_removed_green = self.filter_color(self.bg_removed.copy(), "green") #Filtro color verde
+                self.bg_removed_green_blue = self.filter_color(self.bg_removed_green.copy(), "blue") #Filtro color azul 
 
-                    #self.obj_vision.see_depth()
-                    #self.obj_vision.hole_filling_depth()
+                #self.obj_vision.see_depth()
+                #self.obj_vision.hole_filling_depth()
 
-                    #self.search_lines(self.bg_removed_green_blue.copy(), "white")
+                #self.search_lines(self.bg_removed_green_blue.copy(), "white")
 
-                    #result_objs = self.search_objs(self.bg_removed.copy()) #solo bg_removed
-                    cz_blue_real, width_object, image_blue = self.search_blue(self.bg_removed_green.copy(), "blue") #Search blue obstacles
-                    #cv2.imwrite("evidence_image/frame_blue"+self.timestamp+".png", self.image_blue) 
-                    cv2.imshow('blue object', image_blue)
+                result_objs = self.search_objs(self.bg_removed.copy()) #solo bg_removed
+                cz_blue_real, width_object, image_final = self.search_blue(self.bg_removed_green.copy(), "blue") #Search blue obstacles
 
-                    #Search lines
-                    lines_yellow = self.search_lines(self.bg_removed_green_blue.copy(), "yellow") 
-                    #cv2.imshow("lineas yellow", lines_yellow) 
+                #Search lines
+                image_final = self.search_lines(self.bg_removed_green_blue.copy(), image_final, "yellow") 
 
-                    a = np.cos(0*np.pi/180)
-                    b = np.sin(0*np.pi/180)
-                    x0 = a * 212
-                    y0 = b * 212
-                    x1 = int(x0 + 10000*(-b))
-                    y1 = int(y0 + 10000*(a))
-                    x2 = int(x0 - 10000*(-b))
-                    y2 = int(y0 - 10000*(a))
-                    cv2.line(image_blue, (x1, y1), (x2, y2), (0, 255, 255), 1, cv2.LINE_AA)
-                    cv2.imshow("lineas yellow", image_blue) 
-                                   
-                    #lines_white = self.search_lines(self.bg_removed_green.copy(), "white")    
-                    #cv2.imshow("lineas white", lines_white)   
+                cv2.imshow('image_final', image_final)
+                               
+                #lines_white = self.search_lines(self.bg_removed_green.copy(), "white")    
+                #cv2.imshow("lineas white", lines_white)   
 
-                    #Mostrar resultado
-                    #cv2.namedWindow("result-objs", cv2.WINDOW_AUTOSIZE)
-                    #cv2.imwrite("evidence_image/search_objs"+self.timestamp+".png", result_objs)
-                    #cv2.imshow("result-objs", result_objs)
+                #Mostrar resultado
+                #cv2.namedWindow("result-objs", cv2.WINDOW_AUTOSIZE)
+                #cv2.imwrite("evidence_image/search_objs"+self.timestamp+".png", result_objs)
+                #cv2.imshow("result-objs", result_objs)
 
-                    #cv2.imshow('xxx blue object', self.bg_removed)
-                    #cv2.imwrite("evidence_image/framegreen.png", bg_removed_green_blue) 
+                #cv2.imshow('xxx blue object', self.bg_removed)
+                #cv2.imwrite("evidence_image/framegreen.png", bg_removed_green_blue) 
 
-                    #cv2.imshow('blue object', img_blue)
+                #cv2.imshow('blue object', img_blue)
 
-                    #self.distance_array_obj.append(cz_blue_real)
-                    #self.width_array_obj.append(width_object)
+                #self.distance_array_obj.append(cz_blue_real)
+                #self.width_array_obj.append(width_object)
 
-                    #self.graphic_roc()
+                #self.graphic_roc()
 
-                    #COMMENT PLOT
-                    self.obj_mapeo.Aplot_ball_robot()
+                #COMMENT PLOT
+                self.obj_mapeo.Aplot_ball_robot()
 
                 # Salir del bucle si se presiona ESC
                 k = cv2.waitKey(5) & 0xFF

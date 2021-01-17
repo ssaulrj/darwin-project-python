@@ -1,6 +1,3 @@
-#import pyrealsense2 as rs #Camera library
-import time
-
 class Arobot:
 	def __init__(self):
 		self.angle_robot_z = 0
@@ -39,8 +36,3 @@ class Arobot:
 
 	def net_cpp_python(self):
 		pass
-
-"""if __name__ == '__main__':
-    obj_robot = Arobot()
-    #print(str(obja.clipping_distance_in_meters)) #Obtener un valor de la clase
-    obj_robot.main()"""
